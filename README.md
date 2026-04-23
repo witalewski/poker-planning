@@ -54,7 +54,10 @@ The E2E suite is split into two Playwright projects:
 - `cross-browser-webrtc` — the serious one. It launches Chromium **and**
   Firefox, has them join the same session, vote, and verifies that the
   summaries match across both browsers. Requires real network access for
-  nostr signaling.
+  nostr signaling, so this one runs locally by default and is marked
+  *best-effort* on CI (GitHub-hosted runners frequently block outbound
+  websocket connections to public relays). Force it on in CI with
+  `RUN_WEBRTC_TESTS=1`.
 
 ```sh
 npx playwright test --project=same-browser-ui

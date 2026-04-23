@@ -15,6 +15,13 @@ import { test, expect, chromium, firefox, type Browser, type Page } from '@playw
 
 test.describe.configure({ mode: 'serial' })
 
+// The cross-browser WebRTC test needs outbound access to public nostr
+// relays for signaling. GitHub-hosted runners frequently block or rate-limit
+// those relays, causing flaky failures that aren't really about our code.
+// Opt-in via `RUN_WEBRTC_TESTS=1` (default ON locally, OFF on CI).
+const shouldRun = process.env.CI ? process.env.RUN_WEBRTC_TESTS === '1' : true
+test.skip(!shouldRun, 'Skipping cross-browser WebRTC tests: set RUN_WEBRTC_TESTS=1 to enable in CI.')
+
 let chromiumBrowser: Browser
 let firefoxBrowser: Browser
 

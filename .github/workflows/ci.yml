@@ -21,8 +21,11 @@ jobs:
         run: npx playwright install --with-deps chromium firefox
       - name: E2E (same-browser UI)
         run: npx playwright test --project=same-browser-ui
-      - name: E2E (cross-browser WebRTC)
-        run: npx playwright test --project=cross-browser-webrtc
+      - name: E2E (cross-browser WebRTC) [best-effort]
+        # Nostr relays used for signaling are often blocked / rate-limited from
+        # GitHub-hosted runners, so this job is informational only.
+        continue-on-error: true
+        run: RUN_WEBRTC_TESTS=1 npx playwright test --project=cross-browser-webrtc
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
