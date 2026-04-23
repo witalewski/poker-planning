@@ -79,11 +79,10 @@
   font-size: 22px;
   color: var(--pink-soft);
   box-shadow: inset 0 0 18px rgba(255, 61, 213, 0.2);
-  animation: float-y 3s ease-in-out infinite;
 }
-.logo-chip:nth-child(2) { animation-delay: 0.15s; color: var(--danger); border-color: rgba(255, 96, 120, 0.5); }
-.logo-chip:nth-child(3) { animation-delay: 0.3s; color: var(--cyan-soft); border-color: rgba(49, 229, 255, 0.5); }
-.logo-chip:nth-child(4) { animation-delay: 0.45s; color: var(--green); border-color: rgba(88, 240, 184, 0.5); }
+.logo-chip:nth-child(2) { color: var(--danger); border-color: rgba(255, 96, 120, 0.5); }
+.logo-chip:nth-child(3) { color: var(--cyan-soft); border-color: rgba(49, 229, 255, 0.5); }
+.logo-chip:nth-child(4) { color: var(--green); border-color: rgba(88, 240, 184, 0.5); }
 
 .home-title {
   font-family: var(--font-display);

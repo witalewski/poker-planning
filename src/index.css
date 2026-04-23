@@ -49,11 +49,6 @@ button { font-family: inherit; }
 input { font-family: inherit; }
 code { font-family: 'JetBrains Mono', 'Menlo', monospace; }
 
-@keyframes float-y {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
 @keyframes pulse-dot {
   0%, 100% { box-shadow: 0 0 0 0 rgba(88, 240, 184, 0.8); }
   50% { box-shadow: 0 0 0 8px rgba(88, 240, 184, 0); }
