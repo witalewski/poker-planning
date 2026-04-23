@@ -43,7 +43,7 @@ export function HomePage({ onEnter, initialName }: HomePageProps) {
     <main className="home">
       <header className="home-hero">
         <div className="home-logo" aria-hidden="true">
-          <span className="logo-chip">♠</span>
+          <span className="logo-chip">🦆</span>
           <span className="logo-chip">♥</span>
           <span className="logo-chip">♦</span>
           <span className="logo-chip">♣</span>
