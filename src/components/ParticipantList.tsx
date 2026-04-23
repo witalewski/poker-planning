@@ -1,4 +1,5 @@
 import type { SessionState } from '../lib/types'
+import { CyberpunkDuck } from './CyberpunkDuck'
 
 interface Props {
   state: SessionState
@@ -24,7 +25,7 @@ export function ParticipantList({ state, selfId }: Props) {
             data-has-vote={hasVote ? 'true' : 'false'}
           >
             <span className="participant-avatar" aria-hidden="true">
-              {p.name.slice(0, 1).toUpperCase()}
+              <CyberpunkDuck seed={p.id || p.name} />
             </span>
             <span className="participant-name">
               {p.name}
