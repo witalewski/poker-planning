@@ -1,4 +1,4 @@
-import type { Action, Round, SessionState, CardValue, Participant, DigestSummary } from './types'
+import type { Action, Round, SessionState, CardValue } from './types'
 
 export function initialState(sessionId: string): SessionState {
   return {
@@ -9,10 +9,11 @@ export function initialState(sessionId: string): SessionState {
   }
 }
 
-export function createRound(params: { title: string; id: string }): Round {
+export function createRound(params: { title: string; startedBy: string; id: string }): Round {
   return {
     id: params.id,
     title: params.title,
+    startedBy: params.startedBy,
     startedAt: Date.now(),
     votes: {},
     revealed: false,
@@ -23,19 +24,7 @@ export function createRound(params: { title: string; id: string }): Round {
 export function reducer(state: SessionState, action: Action): SessionState {
   switch (action.type) {
     case 'PARTICIPANT_JOIN': {
-      const existing = state.participants[action.participant.id]
-      if (existing) {
-        // Preserve the earliest joinedAt across reconnects so crew order stays stable.
-        const joinedAt = Math.min(existing.joinedAt, action.participant.joinedAt)
-        if (joinedAt === existing.joinedAt) return state
-        return {
-          ...state,
-          participants: {
-            ...state.participants,
-            [action.participant.id]: { ...existing, joinedAt },
-          },
-        }
-      }
+      if (state.participants[action.participant.id]) return state
       return {
         ...state,
         participants: { ...state.participants, [action.participant.id]: action.participant },
@@ -54,34 +43,7 @@ export function reducer(state: SessionState, action: Action): SessionState {
       }
       return { ...state, participants: next, currentRound }
     }
-    case 'PARTICIPANT_RENAME': {
-      const existing = state.participants[action.participantId]
-      if (!existing || existing.name === action.name) return state
-      return {
-        ...state,
-        participants: {
-          ...state.participants,
-          [action.participantId]: { ...existing, name: action.name },
-        },
-      }
-    }
     case 'ROUND_START': {
-      // Same round id → merge votes + sticky reveal. Idempotent under replay.
-      if (state.currentRound && state.currentRound.id === action.round.id) {
-        const merged: Round = {
-          ...state.currentRound,
-          votes: { ...action.round.votes, ...state.currentRound.votes },
-          revealed: state.currentRound.revealed || action.round.revealed,
-          revealedAt: state.currentRound.revealedAt ?? action.round.revealedAt,
-        }
-        return { ...state, currentRound: merged }
-      }
-      // Concurrent starts: keep the lexicographic winner so every peer converges.
-      if (state.currentRound && !state.currentRound.revealed) {
-        if (pickNewerRound(state.currentRound, action.round) === state.currentRound) {
-          return state
-        }
-      }
       const history = state.currentRound && state.currentRound.revealed
         ? [...state.history, state.currentRound]
         : state.history
@@ -109,22 +71,31 @@ export function reducer(state: SessionState, action: Action): SessionState {
       }
     }
     case 'HELLO_SYNC': {
+      // Merge: newer rounds win, union participants. Simple strategy: take incoming state as truth
+      // when it is ahead (more participants or more history). Preserves local self identity.
       const incoming = action.state
       if (incoming.sessionId !== state.sessionId) return state
-      const mergedParticipants = mergeParticipants(state.participants, incoming.participants)
+      const mergedParticipants = { ...incoming.participants, ...state.participants }
+      // Prefer incoming currentRound if local has none, or if incoming is newer.
       let currentRound = state.currentRound
-      if (!currentRound) {
+      if (!currentRound && incoming.currentRound) currentRound = incoming.currentRound
+      else if (
+        incoming.currentRound &&
+        state.currentRound &&
+        incoming.currentRound.startedAt > state.currentRound.startedAt
+      ) {
         currentRound = incoming.currentRound
-      } else if (incoming.currentRound) {
-        if (incoming.currentRound.id === currentRound.id) {
-          currentRound = {
-            ...currentRound,
-            votes: { ...incoming.currentRound.votes, ...currentRound.votes },
-            revealed: currentRound.revealed || incoming.currentRound.revealed,
-            revealedAt: currentRound.revealedAt ?? incoming.currentRound.revealedAt,
-          }
-        } else {
-          currentRound = pickNewerRound(currentRound, incoming.currentRound)
+      } else if (
+        incoming.currentRound &&
+        state.currentRound &&
+        incoming.currentRound.id === state.currentRound.id
+      ) {
+        // Same round: merge votes and revealed flag (once revealed, stays revealed).
+        currentRound = {
+          ...state.currentRound,
+          votes: { ...state.currentRound.votes, ...incoming.currentRound.votes },
+          revealed: state.currentRound.revealed || incoming.currentRound.revealed,
+          revealedAt: state.currentRound.revealedAt ?? incoming.currentRound.revealedAt,
         }
       }
       const history = mergeHistory(state.history, incoming.history)
@@ -133,79 +104,6 @@ export function reducer(state: SessionState, action: Action): SessionState {
     default:
       return state
   }
-}
-
-/**
- * Deterministic tiebreak between two rounds. Lexicographic on (startedAt, id)
- * so peers with skewed clocks still converge on the same winner.
- */
-export function pickNewerRound(a: Round, b: Round): Round {
-  if (a.startedAt !== b.startedAt) return a.startedAt > b.startedAt ? a : b
-  return a.id > b.id ? a : b
-}
-
-/**
- * Union of participant maps, preserving the earliest joinedAt per id and
- * preferring the local name (incoming may be stale during rename propagation).
- */
-export function mergeParticipants(
-  local: Record<string, Participant>,
-  incoming: Record<string, Participant>,
-): Record<string, Participant> {
-  const out: Record<string, Participant> = { ...incoming }
-  for (const [id, p] of Object.entries(local)) {
-    const inc = out[id]
-    if (!inc) {
-      out[id] = p
-    } else {
-      out[id] = { ...p, joinedAt: Math.min(p.joinedAt, inc.joinedAt) }
-    }
-  }
-  return out
-}
-
-/**
- * Canonical, deterministic digest of session state. Two peers that have
- * applied the same set of actions (in any order) produce the same digest;
- * any divergence changes it. Used for anti-entropy.
- */
-export function computeDigest(state: SessionState): { digest: string; summary: DigestSummary } {
-  const round = state.currentRound
-  const participants = Object.values(state.participants)
-    .map((p) => [p.id, p.joinedAt, p.name] as const)
-    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-  const votesSorted = round
-    ? Object.entries(round.votes).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-    : []
-  const historyIds = state.history.map((r) => r.id).slice().sort()
-
-  const canonical = JSON.stringify({
-    round: round
-      ? { id: round.id, revealed: round.revealed, revealedAt: round.revealedAt, votes: votesSorted }
-      : null,
-    participants,
-    historyIds,
-  })
-
-  const summary: DigestSummary = {
-    roundId: round?.id ?? null,
-    voterCount: round ? Object.keys(round.votes).length : 0,
-    revealed: round?.revealed ?? false,
-    historyLen: state.history.length,
-    participantCount: participants.length,
-  }
-
-  return { digest: fnv1a(canonical), summary }
-}
-
-/** FNV-1a 32-bit hash, returned as a hex string. Deterministic, no crypto needed. */
-function fnv1a(input: string): string {
-  let h = 0x811c9dc5
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i)
-    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0
-  }
-  return h.toString(16).padStart(8, '0')
 }
 
 function mergeHistory(a: Round[], b: Round[]): Round[] {

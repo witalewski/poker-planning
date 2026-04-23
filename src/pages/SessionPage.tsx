@@ -78,6 +78,7 @@ function ActiveSession({
   const { state, selfId } = session
   const round = state.currentRound
   const myVote: CardValue | undefined = round?.votes[selfId]
+  const isRoundStarter = round?.startedBy === selfId
   const participantCount = Object.keys(state.participants).length
 
   const startRound = (e: FormEvent) => {
@@ -172,14 +173,16 @@ function ActiveSession({
                   <h2 className="round-title" data-testid="round-title">{round.title}</h2>
                 </div>
                 <div className="round-actions">
-                  <button
-                    type="button"
-                    className="neon-btn neon-btn-cyan"
-                    onClick={() => session.reveal()}
-                    data-testid="reveal-button"
-                  >
-                    Force reveal
-                  </button>
+                  {isRoundStarter && (
+                    <button
+                      type="button"
+                      className="neon-btn neon-btn-cyan"
+                      onClick={() => session.reveal()}
+                      data-testid="reveal-button"
+                    >
+                      Force reveal
+                    </button>
+                  )}
                 </div>
               </div>
 
